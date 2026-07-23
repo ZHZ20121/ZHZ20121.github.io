@@ -1,0 +1,898 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>上海公交多级票价线路票价查询</title>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", "PingFang SC", "Hiragino Sans GB", "Microsoft YaHei", sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            padding: 20px;
+        }
+        .container {
+            background: white;
+            border-radius: 20px;
+            box-shadow: 0 20px 60px rgba(0,0,0,0.3);
+            padding: 40px;
+            width: 100%;
+            max-width: 540px;
+            text-align: center;
+            position: relative;
+        }
+        .admin-btn {
+            position: absolute;
+            top: 15px;
+            right: 15px;
+            background: #f0f0f0;
+            border: none;
+            padding: 6px 14px;
+            border-radius: 20px;
+            font-size: 12px;
+            color: #666;
+            cursor: pointer;
+            transition: all 0.3s;
+        }
+        .admin-btn:hover { background: #e0e0e0; }
+        .icon { font-size: 60px; margin-bottom: 10px; }
+        h1 { color: #333; font-size: 22px; margin-bottom: 8px; font-weight: 700; }
+        .subtitle { color: #888; font-size: 14px; margin-bottom: 25px; }
+        .search-box { position: relative; margin-bottom: 15px; }
+        .search-input {
+            width: 100%;
+            padding: 14px 45px 14px 15px;
+            border: 2px solid #e0e0e0;
+            border-radius: 12px;
+            font-size: 16px;
+            outline: none;
+            transition: all 0.3s;
+        }
+        .search-input:focus { border-color: #667eea; }
+        .search-icon { position: absolute; right: 15px; top: 50%; transform: translateY(-50%); color: #999; font-size: 18px; }
+        select {
+            width: 100%;
+            padding: 14px 15px;
+            border: 2px solid #e0e0e0;
+            border-radius: 12px;
+            font-size: 16px;
+            outline: none;
+            cursor: pointer;
+            background: white;
+            appearance: none;
+            -webkit-appearance: none;
+            background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 12 12'%3E%3Cpath fill='%23667eea' d='M6 8L1 3h10z'/%3E%3C/svg%3E");
+            background-repeat: no-repeat;
+            background-position: right 15px center;
+        }
+        select:focus { border-color: #667eea; }
+        .btn {
+            width: 100%;
+            padding: 14px;
+            margin-top: 18px;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            border: none;
+            border-radius: 12px;
+            font-size: 16px;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.3s;
+        }
+        .btn:hover { transform: translateY(-2px); box-shadow: 0 8px 20px rgba(102,126,234,0.4); }
+        .btn-secondary {
+            background: linear-gradient(135deg, #f093fb 0%, #f5576c 100%);
+            margin-top: 10px;
+        }
+        .count { margin-top: 15px; color: #999; font-size: 13px; }
+        .route-tag {
+            display: inline-block;
+            background: #f0f0f0;
+            padding: 3px 10px;
+            border-radius: 20px;
+            font-size: 12px;
+            color: #666;
+            margin-top: 8px;
+        }
+        .loading {
+            display: none;
+            margin-top: 20px;
+            padding: 20px;
+            color: #667eea;
+            font-size: 16px;
+        }
+        .loading.active { display: block; }
+        .spinner {
+            display: inline-block;
+            width: 24px;
+            height: 24px;
+            border: 3px solid #e0e0e0;
+            border-top-color: #667eea;
+            border-radius: 50%;
+            animation: spin 1s linear infinite;
+            margin-right: 10px;
+            vertical-align: middle;
+        }
+        @keyframes spin { to { transform: rotate(360deg); } }
+        .fare-result {
+            margin-top: 20px;
+            padding: 20px;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            border-radius: 16px;
+            color: white;
+            display: none;
+        }
+        .fare-result.active { display: block; }
+        .fare-result h3 { font-size: 18px; margin-bottom: 10px; }
+        .dir-tabs {
+            display: flex;
+            gap: 8px;
+            margin-bottom: 15px;
+            justify-content: center;
+        }
+        .dir-tab {
+            padding: 6px 16px;
+            border: 2px solid rgba(255,255,255,0.4);
+            background: transparent;
+            color: white;
+            border-radius: 20px;
+            cursor: pointer;
+            font-size: 13px;
+            transition: all 0.3s;
+        }
+        .dir-tab.active, .dir-tab:hover {
+            background: rgba(255,255,255,0.25);
+            border-color: white;
+        }
+        .station-select {
+            display: flex;
+            gap: 10px;
+            margin-top: 15px;
+            align-items: center;
+        }
+        .station-select select {
+            flex: 1;
+            background: white;
+            color: #333;
+            border: none;
+        }
+        .station-select span { font-size: 20px; }
+        .fare-display-box {
+            margin-top: 15px;
+            padding: 15px;
+            background: rgba(255,255,255,0.2);
+            border-radius: 12px;
+            display: none;
+        }
+        .fare-display-box.active { display: block; }
+        .fare-price { font-size: 42px; font-weight: 700; }
+        .fare-detail { font-size: 14px; opacity: 0.9; margin-top: 5px; }
+        .fare-image-wrap {
+            margin-top: 20px;
+            display: none;
+            padding: 15px;
+            background: #f8f9fa;
+            border-radius: 16px;
+        }
+        .fare-image-wrap.active { display: block; }
+        .fare-image-wrap img {
+            max-width: 100%;
+            border-radius: 12px;
+            box-shadow: 0 4px 15px rgba(0,0,0,0.1);
+        }
+        .fare-image-wrap .img-label {
+            font-size: 13px;
+            color: #888;
+            margin-bottom: 10px;
+        }
+        .error-box {
+            margin-top: 20px;
+            padding: 20px;
+            background: #fff3f3;
+            border-radius: 12px;
+            color: #e74c3c;
+            display: none;
+        }
+        .error-box.active { display: block; }
+
+        /* 转换器界面 */
+        .converter-panel { display: none; }
+        .converter-panel.active { display: block; }
+        .upload-area {
+            border: 2px dashed #ccc;
+            border-radius: 12px;
+            padding: 40px 20px;
+            text-align: center;
+            color: #999;
+            cursor: pointer;
+            transition: all 0.3s;
+            margin: 20px 0;
+        }
+        .upload-area:hover, .upload-area.dragover {
+            border-color: #667eea;
+            color: #667eea;
+            background: #f8f9ff;
+        }
+        .upload-area .upload-icon { font-size: 48px; margin-bottom: 10px; }
+        .preview-box {
+            text-align: left;
+            background: #f8f9fa;
+            border-radius: 10px;
+            padding: 15px;
+            margin-top: 15px;
+            font-family: "SF Mono", "Consolas", monospace;
+            font-size: 13px;
+            line-height: 1.6;
+            white-space: pre-wrap;
+            word-break: break-all;
+            max-height: 300px;
+            overflow-y: auto;
+            display: none;
+        }
+        .preview-box.active { display: block; }
+        .file-info {
+            background: #e8f5e9;
+            border-radius: 8px;
+            padding: 10px 15px;
+            margin: 10px 0;
+            font-size: 14px;
+            color: #2e7d32;
+            display: none;
+        }
+        .file-info.active { display: block; }
+        .success-msg {
+            background: #e8f5e9;
+            color: #2e7d32;
+            padding: 12px;
+            border-radius: 10px;
+            margin-top: 10px;
+            font-size: 14px;
+            display: none;
+        }
+        .success-msg.active { display: block; }
+        .tab-bar {
+            display: flex;
+            gap: 8px;
+            margin-bottom: 20px;
+            justify-content: center;
+        }
+        .tab-btn {
+            padding: 8px 16px;
+            border: 2px solid #667eea;
+            background: white;
+            color: #667eea;
+            border-radius: 20px;
+            cursor: pointer;
+            font-size: 13px;
+            transition: all 0.3s;
+        }
+        .tab-btn.active, .tab-btn:hover {
+            background: #667eea;
+            color: white;
+        }
+        .tab-content { display: none; }
+        .tab-content.active { display: block; }
+        .info-text {
+            font-size: 13px;
+            color: #888;
+            margin: 10px 0;
+            line-height: 1.6;
+        }
+        .format-hint {
+            background: #fff8e1;
+            border-radius: 10px;
+            padding: 15px;
+            margin: 15px 0;
+            text-align: left;
+            font-size: 13px;
+            color: #666;
+        }
+        .format-hint h4 { color: #333; margin-bottom: 8px; font-size: 14px; }
+        .format-hint code {
+            background: #f0f0f0;
+            padding: 2px 6px;
+            border-radius: 4px;
+            font-family: monospace;
+        }
+    </style>
+</head>
+<body>
+    <!-- ========== 用户查询界面 ========== -->
+    <div class="container" id="userPanel">
+        <button class="admin-btn" onclick="showConverter()">⚙️ 转换器</button>
+        <div class="icon">🚌</div>
+        <h1>上海公交多级票价线路票价查询</h1>
+        <p class="subtitle">选择线路，查询票价</p>
+        <div class="search-box">
+            <input type="text" class="search-input" id="userSearchInput" placeholder="搜索线路名称..." autocomplete="off">
+            <span class="search-icon">🔍</span>
+        </div>
+        <select id="userRouteSelect" size="6">
+            <option value="991路">991路</option>
+            <option value="628路">628路</option>
+            <option value="上嘉线">上嘉线</option>
+            <option value="上奉专线">上奉专线</option>
+            <option value="上石线">上石线</option>
+            <option value="上青线">上青线</option>
+            <option value="南东专线">南东专线</option>
+            <option value="南南线">南南线</option>
+            <option value="南团快线">南团快线</option>
+            <option value="南堡专线">南堡专线</option>
+            <option value="南堡二线">南堡二线</option>
+            <option value="南堡快线">南堡快线</option>
+            <option value="南堡支线">南堡支线</option>
+            <option value="南建专线">南建专线</option>
+            <option value="南新专线">南新专线</option>
+            <option value="南松专线">南松专线</option>
+            <option value="南江专线">南江专线</option>
+            <option value="南海二线">南海二线</option>
+            <option value="南海线">南海线</option>
+            <option value="南牛线">南牛线</option>
+            <option value="南红专线">南红专线</option>
+            <option value="南航线">南航线</option>
+            <option value="南裕专线">南裕专线</option>
+            <option value="南跃线">南跃线</option>
+            <option value="南金线">南金线</option>
+            <option value="南隆专线">南隆专线</option>
+            <option value="南风线">南风线</option>
+            <option value="南龙专线">南龙专线</option>
+            <option value="嘉松线">嘉松线</option>
+            <option value="堡七线">堡七线</option>
+            <option value="堡四线">堡四线</option>
+            <option value="堡红线">堡红线</option>
+            <option value="堡胜专线">堡胜专线</option>
+            <option value="堡进线">堡进线</option>
+            <option value="堡陈专线">堡陈专线</option>
+            <option value="堡陈中线">堡陈中线</option>
+            <option value="堡陈北线">堡陈北线</option>
+            <option value="大泥专线">大泥专线</option>
+            <option value="奉卫线">奉卫线</option>
+            <option value="奉浦快线">奉浦快线</option>
+            <option value="崇明E乘巴士1号线">崇明E乘巴士1号线</option>
+            <option value="徐川专线">徐川专线</option>
+            <option value="新临专线">新临专线</option>
+            <option value="新蓝专线">新蓝专线</option>
+            <option value="朱松专线">朱松专线</option>
+            <option value="机场八线">机场八线</option>
+            <option value="机场四线">机场四线</option>
+            <option value="机场守航夜宵线">机场守航夜宵线</option>
+            <option value="松卫专线">松卫专线</option>
+            <option value="松卫线">松卫线</option>
+            <option value="松新枫线">松新枫线</option>
+            <option value="松朱线">松朱线</option>
+            <option value="松江11路">松江11路</option>
+            <option value="松江16路">松江16路</option>
+            <option value="松江20路">松江20路</option>
+            <option value="松江29路">松江29路</option>
+            <option value="松江33路">松江33路</option>
+            <option value="松江68路">松江68路</option>
+            <option value="松江6路">松江6路</option>
+            <option value="松江76路">松江76路</option>
+            <option value="松江91路">松江91路</option>
+            <option value="松江92路">松江92路</option>
+            <option value="松江94路">松江94路</option>
+            <option value="松江有轨电车1号线">松江有轨电车1号线</option>
+            <option value="松江有轨电车2号线">松江有轨电车2号线</option>
+            <option value="松莘线">松莘线</option>
+            <option value="松莘线B线">松莘线B线</option>
+            <option value="松青线">松青线</option>
+            <option value="江奉线">江奉线</option>
+            <option value="江平专线">江平专线</option>
+            <option value="沪南线">沪南线</option>
+            <option value="沪嘉专线">沪嘉专线</option>
+            <option value="沪塘专线">沪塘专线</option>
+            <option value="沪朱高速定班线">沪朱高速定班线</option>
+            <option value="沪青高速专线">沪青高速专线</option>
+            <option value="洋山专线">洋山专线</option>
+            <option value="浦亭线">浦亭线</option>
+            <option value="海沈线">海沈线</option>
+            <option value="海航专线">海航专线</option>
+            <option value="申川专线">申川专线</option>
+            <option value="石南专线">石南专线</option>
+            <option value="航奉专线">航奉专线</option>
+            <option value="莘南专线">莘南专线</option>
+            <option value="莘金专线">莘金专线</option>
+            <option value="莲卫专线">莲卫专线</option>
+            <option value="莲金专线">莲金专线</option>
+            <option value="虹桥枢纽4路">虹桥枢纽4路</option>
+            <option value="虹桥枢纽5路">虹桥枢纽5路</option>
+            <option value="虹桥枢纽6路">虹桥枢纽6路</option>
+            <option value="虹桥枢纽6路B线">虹桥枢纽6路B线</option>
+            <option value="虹桥枢纽7路">虹桥枢纽7路</option>
+            <option value="虹练定班线">虹练定班线</option>
+            <option value="邵鹤线">邵鹤线</option>
+            <option value="闵虹1线">闵虹1线</option>
+            <option value="闵虹2线">闵虹2线</option>
+            <option value="陆安线(高速)">陆安线(高速)</option>
+            <option value="陆安线(高速)B">陆安线(高速)B</option>
+            <option value="青商线">青商线</option>
+            <option value="青小线">青小线</option>
+            <option value="青浦DZ9线">青浦DZ9线</option>
+            <option value="青纪线">青纪线</option>
+            <option value="青蒸线">青蒸线</option>
+            <option value="青金线">青金线</option>
+        </select>
+        <button class="btn" onclick="queryFare()">查询票价</button>
+        <div class="loading" id="loadingBox"><span class="spinner"></span>正在读取线路数据...</div>
+        <div class="fare-result" id="fareResult">
+            <h3 id="fareRouteName"></h3>
+            <div class="dir-tabs" id="dirTabs"></div>
+            <div class="station-select">
+                <select id="fromStation"><option value="">选择上车站点</option></select>
+                <span>→</span>
+                <select id="toStation"><option value="">选择下车站点</option></select>
+            </div>
+            <div style="margin-top:15px;">
+                <button class="btn" style="margin-top:0;padding:12px;" onclick="calculateFare()">计算票价</button>
+            </div>
+            <div class="fare-display-box" id="fareDisplayBox">
+                <div class="fare-price" id="farePrice"></div>
+                <div class="fare-detail" id="fareDetail"></div>
+            </div>
+        </div>
+        <div class="fare-image-wrap" id="fareImageWrap">
+            <div class="img-label">📋 该线路票价表</div>
+            <img id="fareImg" src="" alt="票价表">
+        </div>
+        <div class="error-box" id="errorBox">
+            <div style="font-size:40px;margin-bottom:10px;">😕</div>
+            <div id="errorText"></div>
+        </div>
+        <p class="count">共 <span id="routeCount">102</span> 条多级票价线路</p>
+        <span class="route-tag">数字从大到小 · 拼音A-Z排序</span>
+    </div>
+
+    <!-- ========== xlsx转换器界面 ========== -->
+    <div class="container converter-panel" id="converterPanel">
+        <button class="admin-btn" onclick="backToUser()" style="background:#e74c3c;color:white;">返回查询</button>
+        <div class="icon">🔄</div>
+        <h1>xlsx 票价表转换器</h1>
+        <p class="subtitle">上传Excel票价表，生成网页适配的txt文件</p>
+
+        <div class="tab-bar">
+            <button class="tab-btn active" onclick="switchConvTab('upload')">📤 上传转换</button>
+            <button class="tab-btn" onclick="switchConvTab('preview')">👁️ 结果预览</button>
+        </div>
+
+        <div class="tab-content active" id="conv-upload">
+            <div class="format-hint">
+                <h4>📋 xlsx格式说明</h4>
+                • 下三角矩阵，<b>对角线</b>为站点名称<br>
+                • 对角线<b>左下方</b>为票价（从列站点→行站点）<br>
+                • 单向站加标记：<code>（上行单向）</code> 或 <code>（下行单向）</code><br>
+                • 不存在的区间用 <code>/</code> 或 <code>—</code> 填充
+            </div>
+
+            <div class="upload-area" id="uploadArea" onclick="document.getElementById('xlsxInput').click()"
+                ondragover="event.preventDefault();this.classList.add('dragover');" 
+                ondragleave="this.classList.remove('dragover');"
+                ondrop="handleDrop(event)">
+                <div class="upload-icon">📁</div>
+                <div style="font-weight:600;">点击或拖拽上传 xlsx 文件</div>
+                <div style="font-size:12px;margin-top:5px;">支持 .xlsx 格式</div>
+            </div>
+            <input type="file" id="xlsxInput" accept=".xlsx,.xls" style="display:none;" onchange="handleFile(event)">
+
+            <div class="file-info" id="fileInfo"></div>
+            <div class="preview-box" id="previewBox"></div>
+
+            <button class="btn" id="downloadBtn" style="display:none;" onclick="downloadTxt()">💾 下载生成的txt文件</button>
+            <div class="success-msg" id="successMsg"></div>
+        </div>
+
+        <div class="tab-content" id="conv-preview">
+            <div class="info-text">转换结果将显示在这里</div>
+            <div class="preview-box" id="previewBox2" style="display:block;"></div>
+        </div>
+    </div>
+
+    <script>
+        // ==================== SheetJS (xlsx.js) 加载检测 ====================
+        let xlsxLoaded = false;
+        function checkXlsxLoaded() {
+            if (typeof XLSX !== 'undefined') {
+                xlsxLoaded = true;
+            } else {
+                setTimeout(checkXlsxLoaded, 100);
+            }
+        }
+        checkXlsxLoaded();
+
+        // ==================== 用户查询界面 ====================
+        const userSearchInput = document.getElementById('userSearchInput');
+        const userRouteSelect = document.getElementById('userRouteSelect');
+        const allUserOptions = Array.from(userRouteSelect.options);
+
+        userSearchInput.addEventListener('input', function() {
+            const keyword = this.value.trim().toLowerCase();
+            userRouteSelect.innerHTML = '';
+            let matched = 0;
+            allUserOptions.forEach(opt => {
+                if (opt.text.toLowerCase().includes(keyword)) {
+                    userRouteSelect.appendChild(opt.cloneNode(true));
+                    matched++;
+                }
+            });
+            document.getElementById('routeCount').textContent = matched;
+        });
+        userSearchInput.addEventListener('keydown', e => { if (e.key === 'Enter') queryFare(); });
+        userRouteSelect.addEventListener('dblclick', queryFare);
+
+        let currentRouteData = null;
+        let currentRouteName = '';
+        let currentDir = 'up';
+
+        function parseFareFile(text) {
+            const result = { up: [], down: [] };
+            const lines = text.trim().split('\n');
+            for (let line of lines) {
+                line = line.trim();
+                if (!line || !line.includes('=')) continue;
+                const eqIdx = line.indexOf('=');
+                const direction = line.substring(0, eqIdx).trim();
+                let dataStr = line.substring(eqIdx + 1).trim();
+                if (dataStr.startsWith('{') && dataStr.endsWith('}')) {
+                    dataStr = dataStr.slice(1, -1);
+                }
+                const items = [];
+                let current = '';
+                let depth = 0;
+                for (const char of dataStr) {
+                    if (char === '[' || char === '(') { depth++; current += char; }
+                    else if (char === ']' || char === ')') { depth--; current += char; }
+                    else if (char === ',' && depth === 0) { items.push(current.trim()); current = ''; }
+                    else { current += char; }
+                }
+                if (current.trim()) items.push(current.trim());
+                const stations = [];
+                for (const item of items) {
+                    const trimmed = item.trim();
+                    const match = trimmed.match(/^\[([^,]+),\s*\(([^)]+)\)\]$/);
+                    if (match) {
+                        const name = match[1].trim();
+                        const fares = match[2].split(',').map(f => f.trim());
+                        stations.push({ name: name, fares: fares });
+                    } else {
+                        stations.push({ name: trimmed, fares: [] });
+                    }
+                }
+                if (direction === '上行') result.up = stations;
+                else if (direction === '下行') result.down = stations;
+            }
+            return result;
+        }
+
+        async function queryFare() {
+            const route = userRouteSelect.value;
+            if (!route) { alert('请先选择一条线路'); return; }
+            currentRouteName = route;
+            currentRouteData = null;
+            document.getElementById('loadingBox').classList.add('active');
+            document.getElementById('fareResult').classList.remove('active');
+            document.getElementById('fareImageWrap').classList.remove('active');
+            document.getElementById('errorBox').classList.remove('active');
+            document.getElementById('fareDisplayBox').classList.remove('active');
+            try {
+                const response = await fetch(encodeURIComponent(route) + '.txt');
+                if (response.ok) {
+                    const text = await response.text();
+                    currentRouteData = parseFareFile(text);
+                    const hasData = (currentRouteData.up && currentRouteData.up.length > 0) ||
+                                    (currentRouteData.down && currentRouteData.down.length > 0);
+                    if (hasData) {
+                        showStationSelector();
+                    } else {
+                        showFareImage();
+                    }
+                } else {
+                    showFareImage();
+                }
+            } catch (e) {
+                showFareImage();
+            } finally {
+                document.getElementById('loadingBox').classList.remove('active');
+            }
+        }
+
+        function showStationSelector() {
+            const result = document.getElementById('fareResult');
+            result.classList.add('active');
+            document.getElementById('fareRouteName').textContent = '🚌 ' + currentRouteName;
+            const dirTabs = document.getElementById('dirTabs');
+            dirTabs.innerHTML = '';
+            const hasUp = currentRouteData.up && currentRouteData.up.length > 0;
+            const hasDown = currentRouteData.down && currentRouteData.down.length > 0;
+            if (hasUp) {
+                const btn = document.createElement('button');
+                btn.className = 'dir-tab' + (hasUp ? ' active' : '');
+                btn.textContent = '⬆️ 上行';
+                btn.onclick = () => switchDirection('up', btn);
+                dirTabs.appendChild(btn);
+            }
+            if (hasDown) {
+                const btn = document.createElement('button');
+                btn.className = 'dir-tab' + (!hasUp ? ' active' : '');
+                btn.textContent = '⬇️ 下行';
+                btn.onclick = () => switchDirection('down', btn);
+                dirTabs.appendChild(btn);
+            }
+            currentDir = hasUp ? 'up' : 'down';
+            fillStationOptions();
+        }
+
+        function switchDirection(dir, btn) {
+            currentDir = dir;
+            document.querySelectorAll('.dir-tab').forEach(b => b.classList.remove('active'));
+            btn.classList.add('active');
+            document.getElementById('fareDisplayBox').classList.remove('active');
+            fillStationOptions();
+        }
+
+        function fillStationOptions() {
+            const stations = currentRouteData[currentDir] || [];
+            const fromSel = document.getElementById('fromStation');
+            const toSel = document.getElementById('toStation');
+            fromSel.innerHTML = '<option value="">选择上车站点</option>';
+            toSel.innerHTML = '<option value="">选择下车站点</option>';
+            stations.forEach((s, i) => {
+                fromSel.innerHTML += `<option value="${i}">${s.name}</option>`;
+                toSel.innerHTML += `<option value="${i}">${s.name}</option>`;
+            });
+        }
+
+        function calculateFare() {
+            const fromIdx = parseInt(document.getElementById('fromStation').value);
+            const toIdx = parseInt(document.getElementById('toStation').value);
+            if (isNaN(fromIdx) || isNaN(toIdx)) { alert('请选择上车站点和下车站点'); return; }
+            if (fromIdx === toIdx) { alert('上车站点和下车站点不能相同'); return; }
+            if (fromIdx > toIdx) { alert('上车站点必须在下车站点之前，请检查方向'); return; }
+            const stations = currentRouteData[currentDir];
+            const fromStation = stations[fromIdx];
+            const toStation = stations[toIdx];
+            const fareIndex = toIdx - fromIdx - 1;
+            const box = document.getElementById('fareDisplayBox');
+            if (fromStation.fares && fromStation.fares[fareIndex] !== undefined) {
+                const fare = fromStation.fares[fareIndex];
+                document.getElementById('farePrice').textContent = fare + ' 元';
+                document.getElementById('fareDetail').textContent = 
+                    currentRouteName + ' · ' + (currentDir === 'up' ? '上行' : '下行') + ' · ' + 
+                    fromStation.name + ' → ' + toStation.name;
+                box.classList.add('active');
+            } else {
+                alert('未找到该区间票价');
+                box.classList.remove('active');
+            }
+        }
+
+        function showFareImage() {
+            const wrap = document.getElementById('fareImageWrap');
+            const img = document.getElementById('fareImg');
+            img.src = encodeURIComponent(currentRouteName) + '.png';
+            img.onerror = function() {
+                wrap.classList.remove('active');
+                document.getElementById('errorBox').classList.add('active');
+                document.getElementById('errorText').innerHTML = 
+                    '未找到该线路的数据文件或票价表图片<br><span style="font-size:12px;">请确保以下文件至少存在一个：<br>• ' + 
+                    currentRouteName + '.txt（站点数据）<br>• ' + currentRouteName + '.png（票价表图片）</span>';
+            };
+            img.onload = function() {
+                wrap.classList.add('active');
+            };
+        }
+
+        // ==================== 转换器界面 ====================
+        let generatedContent = '';
+        let generatedFilename = '';
+
+        function showConverter() {
+            document.getElementById('userPanel').style.display = 'none';
+            document.getElementById('converterPanel').classList.add('active');
+        }
+
+        function backToUser() {
+            document.getElementById('converterPanel').classList.remove('active');
+            document.getElementById('userPanel').style.display = 'block';
+        }
+
+        function switchConvTab(tab) {
+            document.querySelectorAll('#converterPanel .tab-btn').forEach(b => b.classList.remove('active'));
+            document.querySelectorAll('#converterPanel .tab-content').forEach(c => c.classList.remove('active'));
+            event.target.classList.add('active');
+            document.getElementById('conv-' + tab).classList.add('active');
+        }
+
+        function handleDrop(event) {
+            event.preventDefault();
+            document.getElementById('uploadArea').classList.remove('dragover');
+            const files = event.dataTransfer.files;
+            if (files.length > 0) {
+                processFile(files[0]);
+            }
+        }
+
+        function handleFile(event) {
+            const file = event.target.files[0];
+            if (file) processFile(file);
+        }
+
+        function processFile(file) {
+            if (!xlsxLoaded) {
+                alert('xlsx解析库正在加载，请稍后再试');
+                return;
+            }
+
+            const reader = new FileReader();
+            reader.onload = function(e) {
+                try {
+                    const data = new Uint8Array(e.target.result);
+                    const workbook = XLSX.read(data, { type: 'array' });
+                    const firstSheet = workbook.Sheets[workbook.SheetNames[0]];
+                    const jsonData = XLSX.utils.sheet_to_json(firstSheet, { header: 1, defval: null });
+
+                    const result = convertXlsxToTxt(jsonData, file.name);
+                    generatedContent = result.content;
+                    generatedFilename = result.filename;
+
+                    // 显示文件信息
+                    const fileInfo = document.getElementById('fileInfo');
+                    fileInfo.innerHTML = `📄 ${file.name} &nbsp;|&nbsp; 📐 ${jsonData.length}×${jsonData[0]?.length || 0} &nbsp;|&nbsp; 🚌 ${result.routeName}`;
+                    fileInfo.classList.add('active');
+
+                    // 显示预览
+                    const previewBox = document.getElementById('previewBox');
+                    previewBox.textContent = generatedContent;
+                    previewBox.classList.add('active');
+                    document.getElementById('previewBox2').textContent = generatedContent;
+
+                    // 显示下载按钮
+                    document.getElementById('downloadBtn').style.display = 'block';
+
+                    // 成功提示
+                    const successMsg = document.getElementById('successMsg');
+                    successMsg.innerHTML = `✅ 转换成功！线路名：<b>${result.routeName}</b><br>上行 ${result.upCount} 站 · 下行 ${result.downCount} 站`;
+                    successMsg.classList.add('active');
+
+                } catch (err) {
+                    alert('转换失败：' + err.message);
+                    console.error(err);
+                }
+            };
+            reader.readAsArrayBuffer(file);
+        }
+
+        function convertXlsxToTxt(jsonData, filename) {
+            // 从文件名提取线路名
+            let routeName = filename.replace(/\.xlsx?$/i, '');
+            routeName = routeName.replace(/[-_]?票价表.*$/, '');
+            routeName = routeName.replace(/\(\d+\)$/, '');
+            routeName = routeName.trim();
+
+            const n = jsonData.length;
+
+            // 提取站点列表（对角线元素）
+            const stations = [];
+            for (let i = 0; i < n; i++) {
+                const val = jsonData[i] && jsonData[i][i] !== undefined ? jsonData[i][i] : null;
+                stations.push(val !== null && val !== undefined ? String(val).trim() : null);
+            }
+
+            // 提取票价矩阵（下三角，不含对角线）
+            const fareMatrix = {};
+            for (let i = 0; i < n; i++) {
+                for (let j = 0; j < i; j++) {
+                    const val = jsonData[i] && jsonData[i][j] !== undefined ? jsonData[i][j] : null;
+                    if (val !== null && val !== undefined) {
+                        const fareStr = String(val).trim();
+                        if (fareStr !== '/' && fareStr !== '\\' && fareStr !== '—' && fareStr !== '-') {
+                            const num = parseFloat(fareStr);
+                            if (!isNaN(num)) {
+                                fareMatrix[`${i},${j}`] = fareStr;
+                            }
+                        }
+                    }
+                }
+            }
+
+            // 分离上下行站点
+            const upStations = [];
+            const downStations = [];
+
+            for (let i = 0; i < stations.length; i++) {
+                const station = stations[i];
+                if (!station) continue;
+
+                const isUpOnly = station.includes('上行单向') || station.includes('（上行）') || station.includes('(上行)');
+                const isDownOnly = station.includes('下行单向') || station.includes('（下行）') || station.includes('(下行)');
+
+                // 清理站点名
+                let cleanName = station.replace(/[（(].*?单向[)）]/g, '');
+                cleanName = cleanName.replace(/[（(].*?行[)）]/g, '');
+                cleanName = cleanName.trim();
+
+                if (isUpOnly) {
+                    upStations.push({ origIdx: i, name: cleanName });
+                } else if (isDownOnly) {
+                    downStations.push({ origIdx: i, name: cleanName });
+                } else {
+                    upStations.push({ origIdx: i, name: cleanName });
+                    downStations.push({ origIdx: i, name: cleanName });
+                }
+            }
+
+            // 生成上行数据
+            const upData = [];
+            for (let pos = 0; pos < upStations.length; pos++) {
+                const { origIdx, name } = upStations[pos];
+                const fares = [];
+                for (let nextPos = pos + 1; nextPos < upStations.length; nextPos++) {
+                    const nextIdx = upStations[nextPos].origIdx;
+                    if (nextIdx > origIdx) {
+                        const key = `${nextIdx},${origIdx}`;
+                        if (fareMatrix[key]) fares.push(fareMatrix[key]);
+                    }
+                }
+                if (fares.length > 0) {
+                    upData.push(`[${name}, (${fares.join(', ')})]`);
+                } else {
+                    upData.push(name);
+                }
+            }
+
+            // 生成下行数据（站点顺序反转）
+            const downReversed = [...downStations].reverse();
+            const downData = [];
+            for (let pos = 0; pos < downReversed.length; pos++) {
+                const { origIdx, name } = downReversed[pos];
+                const fares = [];
+                for (let nextPos = pos + 1; nextPos < downReversed.length; nextPos++) {
+                    const nextIdx = downReversed[nextPos].origIdx;
+                    const a = origIdx, b = nextIdx;
+                    const key = `${Math.max(a,b)},${Math.min(a,b)}`;
+                    if (fareMatrix[key]) fares.push(fareMatrix[key]);
+                }
+                if (fares.length > 0) {
+                    downData.push(`[${name}, (${fares.join(', ')})]`);
+                } else {
+                    downData.push(name);
+                }
+            }
+
+            // 生成txt内容
+            const lines = [];
+            if (upData.length > 0) {
+                lines.push(`上行={${upData.join(', ')}}`);
+            }
+            if (downData.length > 0) {
+                lines.push(`下行={${downData.join(', ')}}`);
+            }
+            const content = lines.join('\n');
+
+            return {
+                routeName: routeName,
+                filename: routeName + '.txt',
+                content: content,
+                upCount: upStations.length,
+                downCount: downStations.length
+            };
+        }
+
+        function downloadTxt() {
+            if (!generatedContent) return;
+            const blob = new Blob([generatedContent], { type: 'text/plain;charset=utf-8' });
+            const url = URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = generatedFilename;
+            document.body.appendChild(a);
+            a.click();
+            document.body.removeChild(a);
+            URL.revokeObjectURL(url);
+        }
+    </script>
+</body>
+</html>
