@@ -26,10 +26,14 @@
             text-align: center;
             position: relative;
         }
-        .admin-btn {
+        .admin-btn-group{
             position: absolute;
             top: 15px;
             right: 15px;
+            display: flex;
+            gap:6px;
+        }
+        .admin-btn {
             background: #f0f0f0;
             border: none;
             padding: 6px 14px;
@@ -304,7 +308,10 @@
 <body>
     <!-- ========== 用户查询界面 ========== -->
     <div class="container" id="userPanel">
-        <button class="admin-btn" onclick="showConverter()">⚙️ 转换器</button>
+        <div class="admin-btn-group">
+            <button class="admin-btn" onclick="showRuleNotice()">📄 使用须知</button>
+            <button class="admin-btn" onclick="tryOpenConverter()">⚙️ 转换器</button>
+        </div>
         <div class="icon">🚌</div>
         <h1>上海公交多级票价线路票价查询</h1>
         <p class="subtitle">选择线路，查询票价</p>
@@ -449,7 +456,9 @@
 
     <!-- ========== xlsx转换器界面 ========== -->
     <div class="container converter-panel" id="converterPanel">
-        <button class="admin-btn" onclick="backToUser()" style="background:#e74c3c;color:white;">返回查询</button>
+        <div class="admin-btn-group">
+            <button class="admin-btn" onclick="backToUser()" style="background:#e74c3c;color:white;">返回查询</button>
+        </div>
         <div class="icon">🔄</div>
         <h1>xlsx 票价表转换器</h1>
         <p class="subtitle">上传Excel票价表，生成网页适配的txt文件</p>
@@ -503,11 +512,71 @@
         }
         checkXlsxLoaded();
 
-        // ==================== 用户查询界面 ====================
+        // ==========【新增功能代码开始】==========
+        // 使用须知弹窗
+        function showRuleNotice(){
+            alert("豆包AI生成\n内容仅供参考");
+        }
+        // 转换器密码校验
+        const ADMIN_PASSWORD = "admin111";
+        function tryOpenConverter(){
+            let pwd = prompt("开发者工具 - 转换器\n请输入访问密码：");
+            if(pwd === null) return;
+            if(pwd === ADMIN_PASSWORD){
+                showConverter();
+            }else{
+                alert("密码错误，无法进入转换器");
+            }
+        }
+
+        // 线路原始数据缓存
         const userSearchInput = document.getElementById('userSearchInput');
         const userRouteSelect = document.getElementById('userRouteSelect');
-        const allUserOptions = Array.from(userRouteSelect.options);
+        let allUserOptions = Array.from(userRouteSelect.options);
+        const originalOptionText = new Map();
+        allUserOptions.forEach(opt=>{
+            originalOptionText.set(opt.value, opt.text);
+        });
 
+        // 探测文件是否存在
+        async function fileExists(path){
+            try{
+                const res = await fetch(path, {method:"HEAD"});
+                return res.ok;
+            }catch(e){
+                return false;
+            }
+        }
+
+        // 批量更新所有option后缀标记
+        async function refreshRouteLabel(){
+            const tasks = [];
+            for(let opt of allUserOptions){
+                const routeKey = opt.value;
+                const baseName = encodeURIComponent(routeKey);
+                tasks.push((async ()=>{
+                    let hasTxt = await fileExists(baseName + ".txt");
+                    let hasPng = await fileExists(baseName + ".png");
+                    let hasJpg = await fileExists(baseName + ".jpg");
+                    const originText = originalOptionText.get(routeKey);
+                    if(hasTxt){
+                        opt.textContent = originText;
+                    }else if(hasPng || hasJpg){
+                        opt.textContent = originText + "(图片版)";
+                    }else{
+                        opt.textContent = originText + "(暂不支持)";
+                    }
+                })());
+            }
+            await Promise.allSettled(tasks);
+        }
+        // 页面加载执行探测
+        window.addEventListener("DOMContentLoaded",async ()=>{
+            await refreshRouteLabel();
+        });
+        // ==========【新增功能代码结束】==========
+
+        // ==================== 用户查询界面 ====================
         userSearchInput.addEventListener('input', function() {
             const keyword = this.value.trim().toLowerCase();
             userRouteSelect.innerHTML = '';
@@ -568,9 +637,11 @@
         }
 
         async function queryFare() {
-            const route = userRouteSelect.value;
-            if (!route) { alert('请先选择一条线路'); return; }
-            currentRouteName = route;
+            // 取出原始线路名称（去除 (图片版)/(暂不支持) 后缀）
+            const fullSelectedText = userRouteSelect.options[userRouteSelect.selectedIndex].text;
+            let routeRaw = userRouteSelect.value;
+
+            currentRouteName = routeRaw;
             currentRouteData = null;
             document.getElementById('loadingBox').classList.add('active');
             document.getElementById('fareResult').classList.remove('active');
@@ -578,7 +649,7 @@
             document.getElementById('errorBox').classList.remove('active');
             document.getElementById('fareDisplayBox').classList.remove('active');
             try {
-                const response = await fetch(encodeURIComponent(route) + '.txt');
+                const response = await fetch(encodeURIComponent(routeRaw) + '.txt');
                 if (response.ok) {
                     const text = await response.text();
                     currentRouteData = parseFareFile(text);
@@ -674,11 +745,15 @@
             const img = document.getElementById('fareImg');
             img.src = encodeURIComponent(currentRouteName) + '.png';
             img.onerror = function() {
-                wrap.classList.remove('active');
-                document.getElementById('errorBox').classList.add('active');
-                document.getElementById('errorText').innerHTML = 
-                    '未找到该线路的数据文件或票价表图片<br><span style="font-size:12px;">请确保以下文件至少存在一个：<br>• ' + 
-                    currentRouteName + '.txt（站点数据）<br>• ' + currentRouteName + '.png（票价表图片）</span>';
+                // 尝试jpg
+                img.src = encodeURIComponent(currentRouteName)+".jpg";
+                img.onerror = function(){
+                    wrap.classList.remove('active');
+                    document.getElementById('errorBox').classList.add('active');
+                    document.getElementById('errorText').innerHTML = 
+                        '未找到该线路的数据文件或票价表图片<br><span style="font-size:12px;">请确保以下文件至少存在一个：<br>• ' + 
+                        currentRouteName + '.txt（站点数据）<br>• ' + currentRouteName + '.png / .jpg（票价表图片）</span>';
+                }
             };
             img.onload = function() {
                 wrap.classList.add('active');
