@@ -132,7 +132,12 @@
             display: none;
         }
         .fare-result.active { display: block; }
-        .fare-result h3 { font-size: 18px; margin-bottom: 10px; }
+        .fare-result h3 { font-size: 18px; margin-bottom: 4px; }
+        .route-note {
+            font-size: 12px;
+            opacity: 0.85;
+            margin-bottom:12px;
+        }
         .dir-tabs {
             display: flex;
             gap: 8px;
@@ -203,7 +208,6 @@
             display: none;
         }
         .error-box.active { display: block; }
-
         /* 转换器界面 */
         .converter-panel { display: none; }
         .converter-panel.active { display: block; }
@@ -369,7 +373,7 @@
             <option value="机场八线">机场八线</option>
             <option value="机场四线">机场四线</option>
             <option value="浦东机场守航夜宵线">浦东机场守航夜宵线</option>
-            <option value="松卫专线">松卫专线（本线路部分分界处票价有误，近期修改）</option>
+            <option value="松卫专线">松卫专线</option>
             <option value="松卫线">松卫线</option>
             <option value="松新枫线">松新枫线</option>
             <option value="松朱线">松朱线</option>
@@ -403,7 +407,7 @@
             <option value="申川专线">申川专线</option>
             <option value="石南专线">石南专线</option>
             <option value="航奉专线">航奉专线</option>
-            <option value="莘南专线">莘南专线（自2026/8/29首班车起更名调整为单一票价2元）</option>
+            <option value="莘南专线">莘南专线</option>
             <option value="莘金专线">莘金专线</option>
             <option value="莲卫专线">莲卫专线</option>
             <option value="莲山专线">莲山专线</option>
@@ -434,6 +438,7 @@
         <div class="loading" id="loadingBox"><span class="spinner"></span>正在读取线路数据...</div>
         <div class="fare-result" id="fareResult">
             <h3 id="fareRouteName"></h3>
+            <div class="route-note" id="routeNote"></div>
             <div class="dir-tabs" id="dirTabs"></div>
             <div class="station-select">
                 <select id="fromStation"><option value="">选择上车站点</option></select>
@@ -459,7 +464,6 @@
         <p class="count">共 <span id="routeCount">108</span> 条多级票价线路</p>
         <span class="route-tag">票价信息仅供参考  bilibili@金山6路-W9B</span>
     </div>
-
     <!-- ========== xlsx转换器界面 ========== -->
     <div class="container converter-panel" id="converterPanel">
         <div class="admin-btn-group">
@@ -468,12 +472,10 @@
         <div class="icon">🔄</div>
         <h1>xlsx 票价表转换器</h1>
         <p class="subtitle">上传Excel票价表，生成网页适配的txt文件</p>
-
         <div class="tab-bar">
             <button class="tab-btn active" onclick="switchConvTab('upload')">📤 上传转换</button>
             <button class="tab-btn" onclick="switchConvTab('preview')">👁️ 结果预览</button>
         </div>
-
         <div class="tab-content active" id="conv-upload">
             <div class="format-hint">
                 <h4>📋 xlsx格式说明</h4>
@@ -482,7 +484,6 @@
                 • 单向站加标记：<code>（上行单向）</code> 或 <code>（下行单向）</code><br>
                 • 不存在的区间用 <code>/</code> 或 <code>—</code> 填充
             </div>
-
             <div class="upload-area" id="uploadArea" onclick="document.getElementById('xlsxInput').click()"
                 ondragover="event.preventDefault();this.classList.add('dragover');" 
                 ondragleave="this.classList.remove('dragover');"
@@ -492,20 +493,16 @@
                 <div style="font-size:12px;margin-top:5px;">支持 .xlsx 格式</div>
             </div>
             <input type="file" id="xlsxInput" accept=".xlsx,.xls" style="display:none;" onchange="handleFile(event)">
-
             <div class="file-info" id="fileInfo"></div>
             <div class="preview-box" id="previewBox"></div>
-
             <button class="btn" id="downloadBtn" style="display:none;" onclick="downloadTxt()">💾 下载生成的txt文件</button>
             <div class="success-msg" id="successMsg"></div>
         </div>
-
         <div class="tab-content" id="conv-preview">
             <div class="info-text">转换结果将显示在这里</div>
             <div class="preview-box" id="previewBox2" style="display:block;"></div>
         </div>
     </div>
-
     <script>
         // ==================== SheetJS (xlsx.js) 加载检测 ====================
         let xlsxLoaded = false;
@@ -517,7 +514,6 @@
             }
         }
         checkXlsxLoaded();
-
         // ==========【新增功能代码开始】==========
         // 使用须知弹窗
         function showRuleNotice(){
@@ -534,16 +530,28 @@
                 alert("密码错误，无法进入转换器");
             }
         }
-
         // 线路原始数据缓存
         const userSearchInput = document.getElementById('userSearchInput');
         const userRouteSelect = document.getElementById('userRouteSelect');
         let allUserOptions = Array.from(userRouteSelect.options);
         const originalOptionText = new Map();
+        // 存储每条线路的备注（括号内文字）
+        const routeNoteMap = new Map();
         allUserOptions.forEach(opt=>{
-            originalOptionText.set(opt.value, opt.text);
+            const fullText = opt.text;
+            // 提取括号备注
+            const bracketMatch = fullText.match(/^(.*?)([（(].*[）)])$/);
+            if(bracketMatch){
+                const cleanText = bracketMatch[1].trim();
+                const noteText = bracketMatch[2];
+                originalOptionText.set(opt.value, cleanText);
+                routeNoteMap.set(opt.value, noteText);
+                opt.text = cleanText;
+            }else{
+                originalOptionText.set(opt.value, fullText);
+                routeNoteMap.set(opt.value, "");
+            }
         });
-
         // 探测文件是否存在
         async function fileExists(path){
             try{
@@ -553,7 +561,6 @@
                 return false;
             }
         }
-
         // 批量更新所有option后缀标记
         async function refreshRouteLabel(){
             const tasks = [];
@@ -581,7 +588,6 @@
             await refreshRouteLabel();
         });
         // ==========【新增功能代码结束】==========
-
         // ==================== 用户查询界面 ====================
         userSearchInput.addEventListener('input', function() {
             const keyword = this.value.trim().toLowerCase();
@@ -597,11 +603,9 @@
         });
         userSearchInput.addEventListener('keydown', e => { if (e.key === 'Enter') queryFare(); });
         userRouteSelect.addEventListener('dblclick', queryFare);
-
         let currentRouteData = null;
         let currentRouteName = '';
         let currentDir = 'up';
-
         function parseFareFile(text) {
             const result = { up: [], down: [] };
             const lines = text.trim().split('\n');
@@ -641,12 +645,10 @@
             }
             return result;
         }
-
         async function queryFare() {
             // 取出原始线路名称（去除 (图片版)/(暂不支持) 后缀）
             const fullSelectedText = userRouteSelect.options[userRouteSelect.selectedIndex].text;
             let routeRaw = userRouteSelect.value;
-
             currentRouteName = routeRaw;
             currentRouteData = null;
             document.getElementById('loadingBox').classList.add('active');
@@ -654,6 +656,8 @@
             document.getElementById('fareImageWrap').classList.remove('active');
             document.getElementById('errorBox').classList.remove('active');
             document.getElementById('fareDisplayBox').classList.remove('active');
+            // 清空备注
+            document.getElementById('routeNote').textContent = "";
             try {
                 const response = await fetch(encodeURIComponent(routeRaw) + '.txt');
                 if (response.ok) {
@@ -675,11 +679,14 @@
                 document.getElementById('loadingBox').classList.remove('active');
             }
         }
-
         function showStationSelector() {
             const result = document.getElementById('fareResult');
             result.classList.add('active');
             document.getElementById('fareRouteName').textContent = '🚌 ' + currentRouteName;
+            // 设置线路备注
+            const noteText = routeNoteMap.get(currentRouteName) || "";
+            document.getElementById('routeNote').textContent = noteText;
+
             const dirTabs = document.getElementById('dirTabs');
             dirTabs.innerHTML = '';
             const hasUp = currentRouteData.up && currentRouteData.up.length > 0;
@@ -701,7 +708,6 @@
             currentDir = hasUp ? 'up' : 'down';
             fillStationOptions();
         }
-
         function switchDirection(dir, btn) {
             currentDir = dir;
             document.querySelectorAll('.dir-tab').forEach(b => b.classList.remove('active'));
@@ -709,7 +715,6 @@
             document.getElementById('fareDisplayBox').classList.remove('active');
             fillStationOptions();
         }
-
         function fillStationOptions() {
             const stations = currentRouteData[currentDir] || [];
             const fromSel = document.getElementById('fromStation');
@@ -721,31 +726,49 @@
                 toSel.innerHTML += `<option value="${i}">${s.name}</option>`;
             });
         }
-
         function calculateFare() {
             const fromIdx = parseInt(document.getElementById('fromStation').value);
             const toIdx = parseInt(document.getElementById('toStation').value);
-            if (isNaN(fromIdx) || isNaN(toIdx)) { alert('请选择上车站点和下车站点'); return; }
-            if (fromIdx === toIdx) { alert('上车站点和下车站点不能相同'); return; }
-            if (fromIdx > toIdx) { alert('上车站点必须在下车站点之前，请检查方向'); return; }
+            const box = document.getElementById('fareDisplayBox');
+            box.classList.add('active');
+
+            if (isNaN(fromIdx) || isNaN(toIdx)) { 
+                document.getElementById('farePrice').textContent = "无该区间票价";
+                document.getElementById('fareDetail').textContent = "请选择上车站点和下车站点";
+                return; 
+            }
+            if (fromIdx === toIdx) { 
+                document.getElementById('farePrice').textContent = "无该区间票价";
+                document.getElementById('fareDetail').textContent = "上车站点和下车站点不能相同";
+                return; 
+            }
+            if (fromIdx > toIdx) { 
+                document.getElementById('farePrice').textContent = "上车站点必须在下车站点之前";
+                document.getElementById('fareDetail').textContent = "";
+                return; 
+            }
             const stations = currentRouteData[currentDir];
             const fromStation = stations[fromIdx];
             const toStation = stations[toIdx];
             const fareIndex = toIdx - fromIdx - 1;
-            const box = document.getElementById('fareDisplayBox');
-            if (fromStation.fares && fromStation.fares[fareIndex] !== undefined) {
-                const fare = fromStation.fares[fareIndex];
+            
+            let fare = null;
+            if(fromStation.fares && fromStation.fares[fareIndex] !== undefined){
+                fare = fromStation.fares[fareIndex];
+            }
+
+            if(fare === null || fare === "-" || fare === "/"){
+                document.getElementById('farePrice').textContent = "无该区间票价";
+                document.getElementById('fareDetail').textContent = 
+                    currentRouteName + ' · ' + (currentDir === 'up' ? '上行' : '下行') + ' · ' + 
+                    fromStation.name + ' → ' + toStation.name;
+            }else{
                 document.getElementById('farePrice').textContent = fare + ' 元';
                 document.getElementById('fareDetail').textContent = 
                     currentRouteName + ' · ' + (currentDir === 'up' ? '上行' : '下行') + ' · ' + 
                     fromStation.name + ' → ' + toStation.name;
-                box.classList.add('active');
-            } else {
-                alert('未找到该区间票价');
-                box.classList.remove('active');
             }
         }
-
         function showFareImage() {
             const wrap = document.getElementById('fareImageWrap');
             const img = document.getElementById('fareImg');
@@ -765,28 +788,23 @@
                 wrap.classList.add('active');
             };
         }
-
         // ==================== 转换器界面 ====================
         let generatedContent = '';
         let generatedFilename = '';
-
         function showConverter() {
             document.getElementById('userPanel').style.display = 'none';
             document.getElementById('converterPanel').classList.add('active');
         }
-
         function backToUser() {
             document.getElementById('converterPanel').classList.remove('active');
             document.getElementById('userPanel').style.display = 'block';
         }
-
         function switchConvTab(tab) {
             document.querySelectorAll('#converterPanel .tab-btn').forEach(b => b.classList.remove('active'));
             document.querySelectorAll('#converterPanel .tab-content').forEach(c => c.classList.remove('active'));
             event.target.classList.add('active');
             document.getElementById('conv-' + tab).classList.add('active');
         }
-
         function handleDrop(event) {
             event.preventDefault();
             document.getElementById('uploadArea').classList.remove('dragover');
@@ -795,18 +813,15 @@
                 processFile(files[0]);
             }
         }
-
         function handleFile(event) {
             const file = event.target.files[0];
             if (file) processFile(file);
         }
-
         function processFile(file) {
             if (!xlsxLoaded) {
                 alert('xlsx解析库正在加载，请稍后再试');
                 return;
             }
-
             const reader = new FileReader();
             reader.onload = function(e) {
                 try {
@@ -814,30 +829,24 @@
                     const workbook = XLSX.read(data, { type: 'array' });
                     const firstSheet = workbook.Sheets[workbook.SheetNames[0]];
                     const jsonData = XLSX.utils.sheet_to_json(firstSheet, { header: 1, defval: null });
-
                     const result = convertXlsxToTxt(jsonData, file.name);
                     generatedContent = result.content;
                     generatedFilename = result.filename;
-
                     // 显示文件信息
                     const fileInfo = document.getElementById('fileInfo');
                     fileInfo.innerHTML = `📄 ${file.name} &nbsp;|&nbsp; 📐 ${jsonData.length}×${jsonData[0]?.length || 0} &nbsp;|&nbsp; 🚌 ${result.routeName}`;
                     fileInfo.classList.add('active');
-
                     // 显示预览
                     const previewBox = document.getElementById('previewBox');
                     previewBox.textContent = generatedContent;
                     previewBox.classList.add('active');
                     document.getElementById('previewBox2').textContent = generatedContent;
-
                     // 显示下载按钮
                     document.getElementById('downloadBtn').style.display = 'block';
-
                     // 成功提示
                     const successMsg = document.getElementById('successMsg');
                     successMsg.innerHTML = `✅ 转换成功！线路名：<b>${result.routeName}</b><br>上行 ${result.upCount} 站 · 下行 ${result.downCount} 站`;
                     successMsg.classList.add('active');
-
                 } catch (err) {
                     alert('转换失败：' + err.message);
                     console.error(err);
@@ -845,56 +854,42 @@
             };
             reader.readAsArrayBuffer(file);
         }
-
         function convertXlsxToTxt(jsonData, filename) {
             // 从文件名提取线路名
             let routeName = filename.replace(/\.xlsx?$/i, '');
             routeName = routeName.replace(/[-_]?票价表.*$/, '');
             routeName = routeName.replace(/\(\d+\)$/, '');
             routeName = routeName.trim();
-
             const n = jsonData.length;
-
             // 提取站点列表（对角线元素）
             const stations = [];
             for (let i = 0; i < n; i++) {
                 const val = jsonData[i] && jsonData[i][i] !== undefined ? jsonData[i][i] : null;
                 stations.push(val !== null && val !== undefined ? String(val).trim() : null);
             }
-
-            // 提取票价矩阵（下三角，不含对角线）
+            // 提取票价矩阵（下三角，不含对角线）【修改：不再过滤-/，原样保存】
             const fareMatrix = {};
             for (let i = 0; i < n; i++) {
                 for (let j = 0; j < i; j++) {
                     const val = jsonData[i] && jsonData[i][j] !== undefined ? jsonData[i][j] : null;
                     if (val !== null && val !== undefined) {
                         const fareStr = String(val).trim();
-                        if (fareStr !== '/' && fareStr !== '\\' && fareStr !== '—' && fareStr !== '-') {
-                            const num = parseFloat(fareStr);
-                            if (!isNaN(num)) {
-                                fareMatrix[`${i},${j}`] = fareStr;
-                            }
-                        }
+                        fareMatrix[`${i},${j}`] = fareStr;
                     }
                 }
             }
-
             // 分离上下行站点
             const upStations = [];
             const downStations = [];
-
             for (let i = 0; i < stations.length; i++) {
                 const station = stations[i];
                 if (!station) continue;
-
                 const isUpOnly = station.includes('上行单向') || station.includes('（上行）') || station.includes('(上行)');
                 const isDownOnly = station.includes('下行单向') || station.includes('（下行）') || station.includes('(下行)');
-
                 // 清理站点名
                 let cleanName = station.replace(/[（(].*?单向[)）]/g, '');
                 cleanName = cleanName.replace(/[（(].*?行[)）]/g, '');
                 cleanName = cleanName.trim();
-
                 if (isUpOnly) {
                     upStations.push({ origIdx: i, name: cleanName });
                 } else if (isDownOnly) {
@@ -904,7 +899,6 @@
                     downStations.push({ origIdx: i, name: cleanName });
                 }
             }
-
             // 生成上行数据
             const upData = [];
             for (let pos = 0; pos < upStations.length; pos++) {
@@ -923,7 +917,6 @@
                     upData.push(name);
                 }
             }
-
             // 生成下行数据（站点顺序反转）
             const downReversed = [...downStations].reverse();
             const downData = [];
@@ -942,7 +935,6 @@
                     downData.push(name);
                 }
             }
-
             // 生成txt内容
             const lines = [];
             if (upData.length > 0) {
@@ -952,7 +944,6 @@
                 lines.push(`下行={${downData.join(', ')}}`);
             }
             const content = lines.join('\n');
-
             return {
                 routeName: routeName,
                 filename: routeName + '.txt',
@@ -961,7 +952,6 @@
                 downCount: downStations.length
             };
         }
-
         function downloadTxt() {
             if (!generatedContent) return;
             const blob = new Blob([generatedContent], { type: 'text/plain;charset=utf-8' });
